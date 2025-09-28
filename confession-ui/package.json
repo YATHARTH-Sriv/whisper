@@ -34,7 +34,7 @@
     "@types/react": "^19.1.6",
     "@types/react-dom": "^19.1.5",
     "@types/semver": "^7.7.1",
-    "@vitejs/plugin-react": "^4.5.1",
+    "@vitejs/plugin-react": "^5.0.4",
     "eslint-plugin-react": "^7.37.5",
     "http-server": "^14.1.1",
     "vite-plugin-node-polyfills": "^0.23.0",
