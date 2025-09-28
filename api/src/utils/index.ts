@@ -13,6 +13,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-export * as Confession from "./managed/confession/contract/index.cjs";
-// export * as Counter from "./managed/confession/contract/index.cjs";
-export * from "./witnesses";
+/**
+ * Utility helpers for the confession API.
+ *
+ * @module
+ */
+
+/**
+ * Generates a buffer containing cryptographically secure random bytes.
+ *
+ * @param length Number of bytes to generate.
+ * @returns A `Uint8Array` containing `length` random bytes.
+ */
+export const randomBytes = (length: number): Uint8Array => {
+  const bytes = new Uint8Array(length);
+  crypto.getRandomValues(bytes);
+  return bytes;
+};

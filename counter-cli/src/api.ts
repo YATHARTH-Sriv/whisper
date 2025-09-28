@@ -16,7 +16,12 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import { type ContractAddress } from '@midnight-ntwrk/compact-runtime';
-import { Counter, type CounterPrivateState, witnesses } from '@midnight-ntwrk/counter-contract';
+import {
+  Counter as Confession,
+  type ConfessionPrivateState,
+  createConfessionPrivateState,
+  witnesses,
+} from '@midnight-ntwrk/confession-contract';
 import { type CoinInfo, nativeToken, Transaction, type TransactionId } from '@midnight-ntwrk/ledger';
 import { deployContract, findDeployedContract } from '@midnight-ntwrk/midnight-js-contracts';
 import { httpClientProofProvider } from '@midnight-ntwrk/midnight-js-http-client-proof-provider';
@@ -38,10 +43,10 @@ import { type Logger } from 'pino';
 import * as Rx from 'rxjs';
 import { WebSocket } from 'ws';
 import {
-  type CounterContract,
-  type CounterPrivateStateId,
-  type CounterProviders,
-  type DeployedCounterContract,
+  confessionPrivateStateId,
+  type ConfessionContract,
+  type ConfessionProviders,
+  type DeployedConfessionContract,
 } from './common-types';
 import { type Config, contractConfig } from './config';
 import { levelPrivateStateProvider } from '@midnight-ntwrk/midnight-js-level-private-state-provider';
@@ -56,68 +61,119 @@ let logger: Logger;
 // @ts-expect-error: It's needed to enable WebSocket usage through apollo
 globalThis.WebSocket = WebSocket;
 
-export const getCounterLedgerState = async (
-  providers: CounterProviders,
-  contractAddress: ContractAddress,
-): Promise<bigint | null> => {
-  assertIsContractAddress(contractAddress);
-  logger.info('Checking contract ledger state...');
-  const state = await providers.publicDataProvider
-    .queryContractState(contractAddress)
-    .then((contractState) => (contractState != null ? Counter.ledger(contractState.data).round : null));
-  logger.info(`Ledger state: ${state}`);
-  return state;
+export type ConfessionBoardSnapshot = {
+  confessionCount: bigint;
+  confessionExists: boolean;
+  confessionContent: string | null;
+  upvotes: bigint;
+  downvotes: bigint;
+  authorHex: string | null;
+  timestamp: bigint | null;
 };
 
-export const counterContractInstance: CounterContract = new Counter.Contract(witnesses);
+export const getConfessionLedgerState = async (
+  providers: ConfessionProviders,
+  contractAddress: ContractAddress,
+): Promise<ReturnType<typeof Confession.ledger> | null> => {
+  assertIsContractAddress(contractAddress);
+  logger.info('Checking contract ledger state...');
+  const contractState = await providers.publicDataProvider.queryContractState(contractAddress);
+  if (contractState == null) {
+    logger.info('No confession contract state found.');
+    return null;
+  }
+  const ledgerState = Confession.ledger(contractState.data);
+  logger.info('Ledger state retrieved.');
+  return ledgerState;
+};
+
+const toBoardSnapshot = (ledgerState: ReturnType<typeof Confession.ledger>): ConfessionBoardSnapshot => ({
+  confessionCount: ledgerState.confessionCount,
+  confessionExists: ledgerState.confession0.is_some,
+  confessionContent: ledgerState.confession0.is_some ? ledgerState.confession0.value : null,
+  upvotes: ledgerState.confession0Upvotes,
+  downvotes: ledgerState.confession0Downvotes,
+  authorHex: ledgerState.confession0.is_some ? toHex(ledgerState.confession0Author) : null,
+  timestamp: ledgerState.confession0.is_some ? ledgerState.confession0Timestamp : null,
+});
+
+const createInitialPrivateState = (): ConfessionPrivateState =>
+  createConfessionPrivateState(randomBytes(32));
+
+export const confessionContractInstance: ConfessionContract = new Confession.Contract(witnesses);
 
 export const joinContract = async (
-  providers: CounterProviders,
+  providers: ConfessionProviders,
   contractAddress: string,
-): Promise<DeployedCounterContract> => {
-  const counterContract = await findDeployedContract(providers, {
+): Promise<DeployedConfessionContract> => {
+  const confessionContract = await findDeployedContract(providers, {
     contractAddress,
-    contract: counterContractInstance,
-    privateStateId: 'counterPrivateState',
-    initialPrivateState: { privateCounter: 0 },
+    contract: confessionContractInstance,
+    privateStateId: confessionPrivateStateId,
+    initialPrivateState: createInitialPrivateState(),
   });
-  logger.info(`Joined contract at address: ${counterContract.deployTxData.public.contractAddress}`);
-  return counterContract;
+  logger.info(`Joined contract at address: ${confessionContract.deployTxData.public.contractAddress}`);
+  return confessionContract;
 };
 
 export const deploy = async (
-  providers: CounterProviders,
-  privateState: CounterPrivateState,
-): Promise<DeployedCounterContract> => {
-  logger.info('Deploying counter contract...');
-  const counterContract = await deployContract(providers, {
-    contract: counterContractInstance,
-    privateStateId: 'counterPrivateState',
+  providers: ConfessionProviders,
+  privateState: ConfessionPrivateState = createInitialPrivateState(),
+): Promise<DeployedConfessionContract> => {
+  logger.info('Deploying confession contract...');
+  const confessionContract = await deployContract(providers, {
+    contract: confessionContractInstance,
+    privateStateId: confessionPrivateStateId,
     initialPrivateState: privateState,
   });
-  logger.info(`Deployed contract at address: ${counterContract.deployTxData.public.contractAddress}`);
-  return counterContract;
+  logger.info(`Deployed contract at address: ${confessionContract.deployTxData.public.contractAddress}`);
+  return confessionContract;
 };
 
-export const increment = async (counterContract: DeployedCounterContract): Promise<FinalizedTxData> => {
-  logger.info('Incrementing...');
-  const finalizedTxData = await counterContract.callTx.increment();
+export const postConfession = async (
+  confessionContract: DeployedConfessionContract,
+  content: string,
+  timestamp: bigint = BigInt(Date.now()),
+): Promise<FinalizedTxData> => {
+  logger.info('Posting new confession...');
+  const finalizedTxData = await confessionContract.callTx.postConfession(content, timestamp);
   logger.info(`Transaction ${finalizedTxData.public.txId} added in block ${finalizedTxData.public.blockHeight}`);
   return finalizedTxData.public;
 };
 
-export const displayCounterValue = async (
-  providers: CounterProviders,
-  counterContract: DeployedCounterContract,
-): Promise<{ counterValue: bigint | null; contractAddress: string }> => {
-  const contractAddress = counterContract.deployTxData.public.contractAddress;
-  const counterValue = await getCounterLedgerState(providers, contractAddress);
-  if (counterValue === null) {
-    logger.info(`There is no counter contract deployed at ${contractAddress}.`);
-  } else {
-    logger.info(`Current counter value: ${Number(counterValue)}`);
+export const voteOnConfession = async (
+  confessionContract: DeployedConfessionContract,
+  isUpvote: boolean,
+): Promise<FinalizedTxData> => {
+  logger.info(`Submitting ${isUpvote ? 'upvote' : 'downvote'}...`);
+  const voteValue = isUpvote ? 1n : 0n;
+  const finalizedTxData = await confessionContract.callTx.vote(voteValue);
+  logger.info(`Transaction ${finalizedTxData.public.txId} added in block ${finalizedTxData.public.blockHeight}`);
+  return finalizedTxData.public;
+};
+
+export const displayConfessionBoard = async (
+  providers: ConfessionProviders,
+  confessionContract: DeployedConfessionContract,
+): Promise<{ snapshot: ConfessionBoardSnapshot | null; contractAddress: string }> => {
+  const contractAddress = confessionContract.deployTxData.public.contractAddress;
+  const ledgerState = await getConfessionLedgerState(providers, contractAddress);
+  if (ledgerState === null) {
+    logger.info(`There is no confession contract deployed at ${contractAddress}.`);
+    return { contractAddress, snapshot: null };
   }
-  return { contractAddress, counterValue };
+  const snapshot = toBoardSnapshot(ledgerState);
+  if (!snapshot.confessionExists) {
+    logger.info(`Confession board at ${contractAddress} is empty. ${snapshot.confessionCount} confession(s) posted.`);
+  } else {
+    logger.info(`Confession board at ${contractAddress}`);
+    logger.info(`  Total confessions posted: ${snapshot.confessionCount}`);
+    logger.info(`  Latest confession: ${snapshot.confessionContent}`);
+    logger.info(`  Author (anonymous hash): ${snapshot.authorHex}`);
+    logger.info(`  Upvotes: ${snapshot.upvotes}, Downvotes: ${snapshot.downvotes}`);
+    logger.info(`  Timestamp: ${snapshot.timestamp}`);
+  }
+  return { contractAddress, snapshot };
 };
 
 export const createWalletAndMidnightProvider = async (wallet: Wallet): Promise<WalletProvider & MidnightProvider> => {
@@ -322,11 +378,11 @@ export const buildFreshWallet = async (config: Config): Promise<Wallet & Resourc
 export const configureProviders = async (wallet: Wallet & Resource, config: Config) => {
   const walletAndMidnightProvider = await createWalletAndMidnightProvider(wallet);
   return {
-    privateStateProvider: levelPrivateStateProvider<typeof CounterPrivateStateId>({
+    privateStateProvider: levelPrivateStateProvider<typeof confessionPrivateStateId>({
       privateStateStoreName: contractConfig.privateStateStoreName,
     }),
     publicDataProvider: indexerPublicDataProvider(config.indexer, config.indexerWS),
-    zkConfigProvider: new NodeZkConfigProvider<'increment'>(contractConfig.zkConfigPath),
+    zkConfigProvider: new NodeZkConfigProvider<'postConfession' | 'vote'>(contractConfig.zkConfigPath),
     proofProvider: httpClientProofProvider(config.proofServer),
     walletProvider: walletAndMidnightProvider,
     midnightProvider: walletAndMidnightProvider,

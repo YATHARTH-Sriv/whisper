@@ -1,18 +1,18 @@
-# Counter DApp
+# Anonymous Confession DApp
 
 [![Generic badge](https://img.shields.io/badge/Compact%20Compiler-0.25.0-1abc9c.svg)](https://shields.io/) [![Generic badge](https://img.shields.io/badge/TypeScript-5.8.3-blue.svg)](https://shields.io/)
 
-A Midnight smart contract example demonstrating counter functionality with zero-knowledge proofs on testnet.
+An anonymous confession board built with Midnight Compact smart contracts. Users can post a single confession, prove authorship privately, and let others upvote or downvote without revealing identities.
 
 ## Project Structure
 
 ```
 example-counter/
 ├── contract/               # Smart contract in Compact language
-│   ├── src/counter.compact # The actual smart contract
+│   ├── src/confession.compact # The actual smart contract
 │   └── src/test/           # Contract unit tests
 └── counter-cli/            # Command-line interface
-    └── src/                # CLI implementation
+  └── src/                # Confession CLI implementation
 ```
 
 ## Prerequisites
@@ -93,8 +93,9 @@ cd contract && npm run compact
 Expected output:
 
 ```
-Compiling 1 circuits:
-  circuit "increment" (k=10, rows=29)
+Compiling 2 circuits:
+  circuit "postConfession" (...)
+  circuit "vote" (...)
 ```
 
 Note: First time may download zero-knowledge parameters (~500MB). This is normal and happens once.
@@ -152,7 +153,7 @@ npm run testnet-remote-ps
 
 If this fails with "Could not find a working container runtime strategy", use Option A instead.
 
-## Run the Counter DApp
+## Run the Confession DApp
 
 Open a new terminal (keep proof server running in the first one).
 
@@ -160,7 +161,7 @@ Open a new terminal (keep proof server running in the first one).
 cd counter-cli && npm run start-testnet-remote
 ```
 
-## Using the Counter DApp
+## Using the Confession DApp
 
 ### Create a Wallet
 
@@ -195,7 +196,7 @@ Your wallet balance is: 1000000000
 
 ### Deploy Your Contract
 
-1. Choose option `1` to deploy a new counter contract
+1. Choose option `1` to deploy a new confession board
 2. Wait for deployment (takes ~30 seconds)
 3. **Save the contract address** for future use
 
@@ -209,11 +210,12 @@ Deployed contract at address: [contract address]
 
 You can now:
 
-- **Increment** the counter (submits a transaction to testnet)
-- **Display** current counter value (queries the blockchain)
-- **Exit** when done
+- **Post a confession** (option `1`). The message is stored once per board and linked to your anonymous identity.
+- **View the board** (option `2`). Shows whether a confession exists along with votes and hashed author.
+- **Upvote or downvote** (options `3` and `4`). Submit feedback on the active confession anonymously.
+- **Exit** when done.
 
-Each increment creates a real transaction on Midnight Testnet.
+Every post or vote submits a real transaction on Midnight Testnet.
 
 ### Reusing Your Wallet
 
@@ -221,7 +223,7 @@ Next time you run the DApp:
 
 1. Choose option `2` to build wallet from seed
 2. Enter your saved seed
-3. Choose option `2` to join existing contract
+3. Choose option `2` to join existing confession board
 4. Enter your saved contract address
 
 ## Useful Links

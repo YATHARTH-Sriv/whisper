@@ -17,7 +17,7 @@ import { type Resource } from '@midnight-ntwrk/wallet';
 import { type Wallet } from '@midnight-ntwrk/wallet-api';
 import path from 'path';
 import * as api from '../api';
-import { type CounterProviders } from '../common-types';
+import { type ConfessionProviders } from '../common-types';
 import { currentDir } from '../config';
 import { createLogger } from '../logger-utils';
 import { TestEnvironment } from './commons';
@@ -29,7 +29,7 @@ const logger = await createLogger(logDir);
 describe('API', () => {
   let testEnvironment: TestEnvironment;
   let wallet: Wallet & Resource;
-  let providers: CounterProviders;
+  let providers: ConfessionProviders;
 
   beforeAll(
     async () => {
@@ -47,20 +47,31 @@ describe('API', () => {
     await testEnvironment.shutdown();
   });
 
-  it('should deploy the contract and increment the counter [@slow]', async () => {
-    const counterContract = await api.deploy(providers, { privateCounter: 0 });
-    expect(counterContract).not.toBeNull();
+  it('should deploy the contract and interact with the confession board [@slow]', async () => {
+    const confessionContract = await api.deploy(providers);
+    expect(confessionContract).not.toBeNull();
 
-    const counter = await api.displayCounterValue(providers, counterContract);
-    expect(counter.counterValue).toEqual(BigInt(0));
+    const initialBoard = await api.displayConfessionBoard(providers, confessionContract);
+    expect(initialBoard.snapshot).not.toBeNull();
+    expect(initialBoard.snapshot?.confessionExists).toEqual(false);
 
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    const response = await api.increment(counterContract);
-    expect(response.txHash).toMatch(/[0-9a-f]{64}/);
-    expect(response.blockHeight).toBeGreaterThan(BigInt(0));
+    await new Promise((resolve) => setTimeout(resolve, 2_000));
+    const postResponse = await api.postConfession(confessionContract, 'Test confession from vitest');
+    expect(postResponse.txHash).toMatch(/[0-9a-f]{64}/);
+    expect(postResponse.blockHeight).toBeGreaterThan(BigInt(0));
 
-    const counterAfter = await api.displayCounterValue(providers, counterContract);
-    expect(counterAfter.counterValue).toEqual(BigInt(1));
-    expect(counterAfter.contractAddress).toEqual(counter.contractAddress);
+    const boardAfterPost = await api.displayConfessionBoard(providers, confessionContract);
+    expect(boardAfterPost.snapshot).not.toBeNull();
+    expect(boardAfterPost.snapshot?.confessionExists).toEqual(true);
+    expect(boardAfterPost.snapshot?.confessionContent).toEqual('Test confession from vitest');
+
+    await new Promise((resolve) => setTimeout(resolve, 2_000));
+    const voteResponse = await api.voteOnConfession(confessionContract, true);
+    expect(voteResponse.txHash).toMatch(/[0-9a-f]{64}/);
+    expect(voteResponse.blockHeight).toBeGreaterThan(BigInt(0));
+
+    const boardAfterVote = await api.displayConfessionBoard(providers, confessionContract);
+    expect(boardAfterVote.snapshot?.upvotes).toEqual(BigInt(1));
+    expect(boardAfterVote.snapshot?.downvotes).toEqual(BigInt(0));
   });
 });

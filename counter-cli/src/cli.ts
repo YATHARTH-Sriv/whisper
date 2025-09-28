@@ -19,7 +19,7 @@ import { stdin as input, stdout as output } from 'node:process';
 import { createInterface, type Interface } from 'node:readline/promises';
 import { type Logger } from 'pino';
 import { type StartedDockerComposeEnvironment, type DockerComposeEnvironment } from 'testcontainers';
-import { type CounterProviders, type DeployedCounterContract } from './common-types';
+import { type ConfessionProviders, type DeployedConfessionContract } from './common-types';
 import { type Config, StandaloneConfig } from './config';
 import * as api from './api';
 
@@ -33,29 +33,34 @@ const GENESIS_MINT_WALLET_SEED = '0000000000000000000000000000000000000000000000
 
 const DEPLOY_OR_JOIN_QUESTION = `
 You can do one of the following:
-  1. Deploy a new counter contract
-  2. Join an existing counter contract
+  1. Deploy a new confession board
+  2. Join an existing confession board
   3. Exit
 Which would you like to do? `;
 
 const MAIN_LOOP_QUESTION = `
 You can do one of the following:
-  1. Increment
-  2. Display current counter value
-  3. Exit
+  1. Post a new confession
+  2. View confession board
+  3. Upvote confession
+  4. Downvote confession
+  5. Exit
 Which would you like to do? `;
 
-const join = async (providers: CounterProviders, rli: Interface): Promise<DeployedCounterContract> => {
+const join = async (providers: ConfessionProviders, rli: Interface): Promise<DeployedConfessionContract> => {
   const contractAddress = await rli.question('What is the contract address (in hex)? ');
   return await api.joinContract(providers, contractAddress);
 };
 
-const deployOrJoin = async (providers: CounterProviders, rli: Interface): Promise<DeployedCounterContract | null> => {
+const deployOrJoin = async (
+  providers: ConfessionProviders,
+  rli: Interface,
+): Promise<DeployedConfessionContract | null> => {
   while (true) {
     const choice = await rli.question(DEPLOY_OR_JOIN_QUESTION);
     switch (choice) {
       case '1':
-        return await api.deploy(providers, { privateCounter: 0 });
+        return await api.deploy(providers);
       case '2':
         return await join(providers, rli);
       case '3':
@@ -67,21 +72,57 @@ const deployOrJoin = async (providers: CounterProviders, rli: Interface): Promis
   }
 };
 
-const mainLoop = async (providers: CounterProviders, rli: Interface): Promise<void> => {
-  const counterContract = await deployOrJoin(providers, rli);
-  if (counterContract === null) {
+const handleActionError = (error: unknown) => {
+  if (error instanceof Error) {
+    logger.error(error.message);
+  } else {
+    logger.error(String(error));
+  }
+};
+
+const mainLoop = async (providers: ConfessionProviders, rli: Interface): Promise<void> => {
+  const confessionContract = await deployOrJoin(providers, rli);
+  if (confessionContract === null) {
     return;
   }
   while (true) {
     const choice = await rli.question(MAIN_LOOP_QUESTION);
     switch (choice) {
       case '1':
-        await api.increment(counterContract);
+        try {
+          const content = await rli.question('Write your confession: ');
+          const trimmedContent = content.trim();
+          if (trimmedContent.length === 0) {
+            logger.error('Confession cannot be empty.');
+            break;
+          }
+          await api.postConfession(confessionContract, trimmedContent);
+        } catch (error: unknown) {
+          handleActionError(error);
+        }
         break;
       case '2':
-        await api.displayCounterValue(providers, counterContract);
+        try {
+          await api.displayConfessionBoard(providers, confessionContract);
+        } catch (error: unknown) {
+          handleActionError(error);
+        }
         break;
       case '3':
+        try {
+          await api.voteOnConfession(confessionContract, true);
+        } catch (error: unknown) {
+          handleActionError(error);
+        }
+        break;
+      case '4':
+        try {
+          await api.voteOnConfession(confessionContract, false);
+        } catch (error: unknown) {
+          handleActionError(error);
+        }
+        break;
+      case '5':
         logger.info('Exiting...');
         return;
       default:

@@ -1,0 +1,55 @@
+// This file is part of the anonymous confession DApp
+// SPDX-License-Identifier: Apache-2.0
+
+pragma language_version >= 0.16 && <= 0.17;
+
+import CompactStandardLibrary;
+
+export ledger confessionCount: Counter;
+export ledger confession0: Maybe<Opaque<"string">>;
+export ledger confession0Upvotes: Uint<32>;
+export ledger confession0Downvotes: Uint<32>;
+export ledger confession0Author: Bytes<32>;
+export ledger confession0Timestamp: Uint<64>;
+
+constructor() {
+  confession0Upvotes = 0;
+  confession0Downvotes = 0;
+  confession0 = none<Opaque<"string">>();
+}
+
+witness localSecretKey(): Bytes<32>;
+
+export circuit postConfession(content: Opaque<"string">, timestamp: Uint<64>): [] {
+  assert(confession0.is_some == false, "Board already has a confession");
+  
+  const confessionId = confessionCount as Uint<64>;
+  const authorId = disclose(anonymousId(localSecretKey(), confessionId));
+  
+  confession0 = disclose(some<Opaque<"string">>(content));
+  confession0Author = authorId;
+  confession0Timestamp = disclose(timestamp);
+  confession0Upvotes = 0;
+  confession0Downvotes = 0;
+  
+  confessionCount.increment(1);
+}
+
+export circuit vote(isUpvote: Field): [] {
+  assert(confession0.is_some == true, "No confession to vote on");
+  
+  const voteType = disclose(isUpvote);
+  if (voteType == 1) {
+    confession0Upvotes = (confession0Upvotes + 1) as Uint<32>;
+  } else {
+    confession0Downvotes = (confession0Downvotes + 1) as Uint<32>;
+  }
+}
+
+export circuit anonymousId(sk: Bytes<32>, actionId: Uint<64>): Bytes<32> {
+  return persistentHash<Vector<3, Bytes<32>>>([
+    pad(32, "confession:anon:"),
+    actionId as Field as Bytes<32>,
+    sk
+  ]);
+}

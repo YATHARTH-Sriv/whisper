@@ -13,6 +13,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-export * as Confession from "./managed/confession/contract/index.cjs";
-// export * as Counter from "./managed/confession/contract/index.cjs";
-export * from "./witnesses";
+import { useContext } from 'react';
+import { DeployedConfessionContext, type DeployedConfessionAPIProvider } from '../contexts';
+
+/**
+ * Convenience hook for accessing the confession deployment provider from React context.
+ */
+export const useDeployedConfessionContext = (): DeployedConfessionAPIProvider => {
+  const context = useContext(DeployedConfessionContext);
+
+  if (!context) {
+    throw new Error('A <DeployedConfessionProvider /> is required.');
+  }
+
+  return context;
+};

@@ -1,5 +1,5 @@
 {
-  "name": "@midnight-ntwrk/counter-contract",
+  "name": "@midnight-ntwrk/confession-contract",
   "version": "0.1.0",
   "license": "Apache-2.0",
   "private": true,
@@ -16,10 +16,10 @@
     }
   },
   "scripts": {
-    "compact": "compact compile src/counter.compact src/managed/counter",
+    "compact": "compact compile src/confession.compact src/managed/confession",
     "test": "vitest run",
     "test:compile": "npm run compact && vitest run",
-    "build": "rm -rf dist && tsc --project tsconfig.build.json && cp -Rf ./src/managed ./dist/managed && cp ./src/counter.compact ./dist",
+    "build": "rm -rf dist && tsc --project tsconfig.build.json && cp -Rf ./src/managed ./dist/managed && cp ./src/confession.compact ./dist",
     "lint": "eslint src",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   }

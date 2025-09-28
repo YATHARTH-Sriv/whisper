@@ -13,14 +13,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pragma language_version >= 0.16 && <= 0.17;
+import { Buffer } from 'buffer';
 
-import CompactStandardLibrary;
+// While Vite maps the mode that the application is running in by setting either the
+// `PROD` or `DEV` variables, we also need to ensure that `NODE_ENV` is set correctly
+// because we also use third-party libraries within the browser (such as Apollo Client),
+// that might expect it.
+//
+// @ts-expect-error - support third-party libraries that require `NODE_ENV`.
+globalThis.process = {
+  env: {
+    NODE_ENV: import.meta.env.MODE, // Map `MODE` to `process.env.NODE_ENV`.
+  },
+};
 
-// public state
-export ledger round: Counter;
-
-// transition function changing public state
-export circuit increment(): [] {
-  round.increment(1);
-}
+// We'll also make use of `Buffer` objects, so we'll ensure a pollyfill for one is
+// present on the global object.
+globalThis.Buffer = Buffer;
